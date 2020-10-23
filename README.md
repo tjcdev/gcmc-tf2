@@ -4,6 +4,12 @@ Tensorflow based implemention of Graph Convolutional Matrix Completion for recom
 
 Rianne van den Berg, Thomas N. Kipf, Max Welling, [Graph Convolutional Matrix Completion](https://arxiv.org/abs/1706.02263) (2017)
 
+# Marise Notes
+
+1. `conda create --name gcmc python=2.7` to create a new conda environment in python 2.7
+2. `conda install tensorflow pandas` to install tensorflow and pandas. note that because the environment is in python 2.7 this command will automatically pick the latest compatible version of tensorflow.
+3. ```python train.py -d ml_100k --accum stack -do 0.7 -nleft -nb 2 -e 1000 --testing```
+
 ## Installation
 
 ```python setup.py install```
