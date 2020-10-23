@@ -13,18 +13,18 @@ import scipy.sparse as sp
 
 import json
 
-from gcmc.preprocessing import create_trainvaltest_split, \
+from preprocessing import create_trainvaltest_split, \
     sparse_to_tuple, preprocess_user_item_features, globally_normalize_bipartite_adjacency
-from gcmc.model import RecommenderGAE
-from gcmc.utils import construct_feed_dict
-from gcmc.data_utils import data_iterator
+from model import RecommenderGAE
+from utils import construct_feed_dict
+from data_utils import data_iterator
 
 
 # Set random seed
 # seed = 123 # use only for unit testing
 seed = int(time.time())
 np.random.seed(seed)
-tf.set_random_seed(seed)
+tf.compat.v1.set_random_seed(seed)
 
 # Settings
 ap = argparse.ArgumentParser()
@@ -195,21 +195,21 @@ val_support = support[np.array(val_u)]
 val_support_t = support_t[np.array(val_v)]
 
 placeholders = {
-    'u_features': tf.sparse_placeholder(tf.float32, shape=np.array(u_features.shape, dtype=np.int64)),
-    'v_features': tf.sparse_placeholder(tf.float32, shape=np.array(v_features.shape, dtype=np.int64)),
-    'u_features_nonzero': tf.placeholder(tf.int32, shape=()),
-    'v_features_nonzero': tf.placeholder(tf.int32, shape=()),
-    'labels': tf.placeholder(tf.int32, shape=(None,)),
+    'u_features': tf.compat.v1.sparse_placeholder(tf.float32, shape=np.array(u_features.shape, dtype=np.int64)),
+    'v_features': tf.compat.v1.sparse_placeholder(tf.float32, shape=np.array(v_features.shape, dtype=np.int64)),
+    'u_features_nonzero': tf.compat.v1.placeholder(tf.int32, shape=()),
+    'v_features_nonzero': tf.compat.v1.placeholder(tf.int32, shape=()),
+    'labels': tf.compat.v1.placeholder(tf.int32, shape=(None,)),
 
-    'user_indices': tf.placeholder(tf.int32, shape=(None,)),
-    'item_indices': tf.placeholder(tf.int32, shape=(None,)),
+    'user_indices': tf.compat.v1.placeholder(tf.int32, shape=(None,)),
+    'item_indices': tf.compat.v1.placeholder(tf.int32, shape=(None,)),
 
-    'dropout': tf.placeholder_with_default(0., shape=()),
+    'dropout': tf.compat.v1.placeholder_with_default(0., shape=()),
 
-    'class_values': tf.placeholder(tf.float32, shape=class_values.shape),
+    'class_values': tf.compat.v1.placeholder(tf.float32, shape=class_values.shape),
 
-    'support': tf.sparse_placeholder(tf.float32, shape=(None, None)),
-    'support_t': tf.sparse_placeholder(tf.float32, shape=(None, None)),
+    'support': tf.compat.v1.sparse_placeholder(tf.float32, shape=(None, None)),
+    'support_t': tf.compat.v1.sparse_placeholder(tf.float32, shape=(None, None)),
 }
 
 # create model
@@ -253,14 +253,14 @@ test_feed_dict = construct_feed_dict(placeholders, u_features, v_features, u_fea
                                      test_labels, test_u_indices, test_v_indices, class_values, 0.)
 
 # Collect all variables to be logged into summary
-merged_summary = tf.summary.merge_all()
+merged_summary = tf.compat.v1.summary.merge_all()
 
-sess = tf.Session()
-sess.run(tf.global_variables_initializer())
+sess = tf.compat.v1.Session()
+sess.run(tf.compat.v1.global_variables_initializer())
 
 if WRITESUMMARY:
-    train_summary_writer = tf.summary.FileWriter(SUMMARIESDIR + '/train', sess.graph)
-    val_summary_writer = tf.summary.FileWriter(SUMMARIESDIR + '/val')
+    train_summary_writer = tf.compat.v1.summary.FileWriter(SUMMARIESDIR + '/train', sess.graph)
+    val_summary_writer = tf.compat.v1.summary.FileWriter(SUMMARIESDIR + '/val')
 else:
     train_summary_writer = None
     val_summary_writer = None
@@ -335,12 +335,12 @@ for epoch in range(NB_EPOCH):
                 val_summary_writer.flush()
 
             if epoch*num_mini_batch+batch_iter % 100 == 0 and not TESTING and False:
-                saver = tf.train.Saver()
+                saver = tf.compat.v1.train.Saver()
                 save_path = saver.save(sess, "tmp/%s_seed%d.ckpt" % (model.name, DATASEED), global_step=model.global_step)
 
                 # load polyak averages
                 variables_to_restore = model.variable_averages.variables_to_restore()
-                saver = tf.train.Saver(variables_to_restore)
+                saver = tf.compat.v1.train.Saver(variables_to_restore)
                 saver.restore(sess, save_path)
 
                 val_avg_loss, val_rmse = sess.run([model.loss, model.rmse], feed_dict=val_feed_dict)
@@ -349,7 +349,7 @@ for epoch in range(NB_EPOCH):
                 print('polyak val rmse = ', val_rmse)
 
                 # load back normal variables
-                saver = tf.train.Saver()
+                saver = tf.compat.v1.train.Saver()
                 saver.restore(sess, save_path)
 
             batch_iter += 1
@@ -358,7 +358,7 @@ for epoch in range(NB_EPOCH):
         pass
 
 # store model including exponential moving averages
-saver = tf.train.Saver()
+saver = tf.compat.v1.train.Saver()
 save_path = saver.save(sess, "tmp/%s.ckpt" % model.name, global_step=model.global_step)
 
 
@@ -374,7 +374,7 @@ if TESTING:
 
     # restore with polyak averages of parameters
     variables_to_restore = model.variable_averages.variables_to_restore()
-    saver = tf.train.Saver(variables_to_restore)
+    saver = tf.compat.v1.train.Saver(variables_to_restore)
     saver.restore(sess, save_path)
 
     test_avg_loss, test_rmse = sess.run([model.loss, model.rmse], feed_dict=test_feed_dict)
@@ -384,7 +384,7 @@ if TESTING:
 else:
     # restore with polyak averages of parameters
     variables_to_restore = model.variable_averages.variables_to_restore()
-    saver = tf.train.Saver(variables_to_restore)
+    saver = tf.compat.v1.train.Saver(variables_to_restore)
     saver.restore(sess, save_path)
 
     val_avg_loss, val_rmse = sess.run([model.loss, model.rmse], feed_dict=val_feed_dict)

@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 
-from gcmc.initializations import *
+from initializations import *
 import tensorflow as tf
 
 # global unique layer ID dictionary for layer name assignment
@@ -11,7 +11,7 @@ _LAYER_UIDS = {}
 def dot(x, y, sparse=False):
     """Wrapper for tf.matmul (sparse vs dense)."""
     if sparse:
-        res = tf.sparse_tensor_dense_matmul(x, y)
+        res = tf.sparse.sparse_dense_matmul(x, y)
     else:
         res = tf.matmul(x, y)
     return res
@@ -33,11 +33,11 @@ def dropout_sparse(x, keep_prob, num_nonzero_elems):
     """
     noise_shape = [num_nonzero_elems]
     random_tensor = keep_prob
-    random_tensor += tf.random_uniform(noise_shape)
+    random_tensor += tf.random.uniform(noise_shape)
     dropout_mask = tf.cast(tf.floor(random_tensor), dtype=tf.bool)
-    pre_out = tf.sparse_retain(x, dropout_mask)
+    pre_out = tf.sparse.retain(x, dropout_mask)
 
-    return pre_out * tf.div(1., keep_prob)
+    return pre_out * tf.compat.v1.div(1., keep_prob)
 
 
 class Layer(object):
@@ -71,17 +71,17 @@ class Layer(object):
         return inputs
 
     def __call__(self, inputs):
-        with tf.name_scope(self.name):
+        with tf.compat.v1.name_scope(self.name):
             if self.logging and not self.sparse_inputs:
-                tf.summary.histogram(self.name + '/inputs', inputs)
+                tf.compat.v1.summary.histogram(self.name + '/inputs', inputs)
             outputs = self._call(inputs)
             if self.logging:
-                tf.summary.histogram(self.name + '/outputs', outputs)
+                tf.compat.v1.summary.histogram(self.name + '/outputs', outputs)
             return outputs
 
     def _log_vars(self):
         for var in self.vars:
-            tf.summary.histogram(self.name + '/vars/' + var, self.vars[var])
+            tf.compat.v1.summary.histogram(self.name + '/vars/' + var, self.vars[var])
 
 
 class Dense(Layer):
@@ -91,7 +91,7 @@ class Dense(Layer):
                  bias=False, **kwargs):
         super(Dense, self).__init__(**kwargs)
 
-        with tf.variable_scope(self.name + '_vars'):
+        with tf.compat.v1.variable_scope(self.name + '_vars'):
             if not share_user_item_weights:
 
                 self.vars['weights_u'] = weight_variable_random_uniform(input_dim, output_dim, name="weights_u")
@@ -119,11 +119,11 @@ class Dense(Layer):
 
     def _call(self, inputs):
         x_u = inputs[0]
-        x_u = tf.nn.dropout(x_u, 1 - self.dropout)
+        x_u = tf.nn.dropout(x_u, 1 - (1 - self.dropout))
         x_u = tf.matmul(x_u, self.vars['weights_u'])
 
         x_v = inputs[1]
-        x_v = tf.nn.dropout(x_v, 1 - self.dropout)
+        x_v = tf.nn.dropout(x_v, 1 - (1 - self.dropout))
         x_v = tf.matmul(x_v, self.vars['weights_v'])
 
         u_outputs = self.act(x_u)
@@ -136,14 +136,14 @@ class Dense(Layer):
         return u_outputs, v_outputs
 
     def __call__(self, inputs):
-        with tf.name_scope(self.name):
+        with tf.compat.v1.name_scope(self.name):
             if self.logging:
-                tf.summary.histogram(self.name + '/inputs_u', inputs[0])
-                tf.summary.histogram(self.name + '/inputs_v', inputs[1])
+                tf.compat.v1.summary.histogram(self.name + '/inputs_u', inputs[0])
+                tf.compat.v1.summary.histogram(self.name + '/inputs_v', inputs[1])
             outputs_u, outputs_v = self._call(inputs)
             if self.logging:
-                tf.summary.histogram(self.name + '/outputs_u', outputs_u)
-                tf.summary.histogram(self.name + '/outputs_v', outputs_v)
+                tf.compat.v1.summary.histogram(self.name + '/outputs_u', outputs_u)
+                tf.compat.v1.summary.histogram(self.name + '/outputs_v', outputs_v)
             return outputs_u, outputs_v
 
 
@@ -157,7 +157,7 @@ class StackGCN(Layer):
 
         assert output_dim % num_support == 0, 'output_dim must be multiple of num_support for stackGC layer'
 
-        with tf.variable_scope(self.name + '_vars'):
+        with tf.compat.v1.variable_scope(self.name + '_vars'):
             self.vars['weights_u'] = weight_variable_random_uniform(input_dim, output_dim, name='weights_u')
 
             if not share_user_item_weights:
@@ -178,8 +178,8 @@ class StackGCN(Layer):
             assert u_features_nonzero is not None and v_features_nonzero is not None, \
                 'u_features_nonzero and v_features_nonzero can not be None when sparse_inputs is True'
 
-        self.support = tf.sparse_split(axis=1, num_split=num_support, sp_input=support)
-        self.support_transpose = tf.sparse_split(axis=1, num_split=num_support, sp_input=support_t)
+        self.support = tf.sparse.split(axis=1, num_split=num_support, sp_input=support)
+        self.support_transpose = tf.sparse.split(axis=1, num_split=num_support, sp_input=support_t)
 
         self.act = act
 
@@ -194,8 +194,8 @@ class StackGCN(Layer):
             x_u = dropout_sparse(x_u, 1 - self.dropout, self.u_features_nonzero)
             x_v = dropout_sparse(x_v, 1 - self.dropout, self.v_features_nonzero)
         else:
-            x_u = tf.nn.dropout(x_u, 1 - self.dropout)
-            x_v = tf.nn.dropout(x_v, 1 - self.dropout)
+            x_u = tf.nn.dropout(x_u, 1 - (1 - self.dropout))
+            x_v = tf.nn.dropout(x_v, 1 - (1 - self.dropout))
 
         supports_u = []
         supports_v = []
@@ -207,8 +207,8 @@ class StackGCN(Layer):
             support = self.support[i]
             support_transpose = self.support_transpose[i]
 
-            supports_u.append(tf.sparse_tensor_dense_matmul(support, tmp_v))
-            supports_v.append(tf.sparse_tensor_dense_matmul(support_transpose, tmp_u))
+            supports_u.append(tf.sparse.sparse_dense_matmul(support, tmp_v))
+            supports_v.append(tf.sparse.sparse_dense_matmul(support_transpose, tmp_u))
 
         z_u = tf.concat(axis=1, values=supports_u)
         z_v = tf.concat(axis=1, values=supports_v)
@@ -219,14 +219,14 @@ class StackGCN(Layer):
         return u_outputs, v_outputs
 
     def __call__(self, inputs):
-        with tf.name_scope(self.name):
+        with tf.compat.v1.name_scope(self.name):
             if self.logging and not self.sparse_inputs:
-                tf.summary.histogram(self.name + '/inputs_u', inputs[0])
-                tf.summary.histogram(self.name + '/inputs_v', inputs[1])
+                tf.compat.v1.summary.histogram(self.name + '/inputs_u', inputs[0])
+                tf.compat.v1.summary.histogram(self.name + '/inputs_v', inputs[1])
             outputs_u, outputs_v = self._call(inputs)
             if self.logging:
-                tf.summary.histogram(self.name + '/outputs_u', outputs_u)
-                tf.summary.histogram(self.name + '/outputs_v', outputs_v)
+                tf.compat.v1.summary.histogram(self.name + '/outputs_u', outputs_u)
+                tf.compat.v1.summary.histogram(self.name + '/outputs_v', outputs_v)
             return outputs_u, outputs_v
 
 
@@ -239,7 +239,7 @@ class OrdinalMixtureGCN(Layer):
                  act=tf.nn.relu, bias=False, share_user_item_weights=False, self_connections=False, **kwargs):
         super(OrdinalMixtureGCN, self).__init__(**kwargs)
 
-        with tf.variable_scope(self.name + '_vars'):
+        with tf.compat.v1.variable_scope(self.name + '_vars'):
 
             self.vars['weights_u'] = tf.stack([weight_variable_random_uniform(input_dim, output_dim,
                                                                              name='weights_u_%d' % i)
@@ -276,9 +276,9 @@ class OrdinalMixtureGCN(Layer):
         self.self_connections = self_connections
 
         self.bias = bias
-        support = tf.sparse_split(axis=1, num_split=num_support, sp_input=support)
+        support = tf.sparse.split(axis=1, num_split=num_support, sp_input=support)
 
-        support_t = tf.sparse_split(axis=1, num_split=num_support, sp_input=support_t)
+        support_t = tf.sparse.split(axis=1, num_split=num_support, sp_input=support_t)
 
         if self_connections:
             self.support = support[:-1]
@@ -301,7 +301,7 @@ class OrdinalMixtureGCN(Layer):
         self.support_nnz = []
         self.support_transpose_nnz = []
         for i in range(len(self.support)):
-            nnz = tf.reduce_sum(tf.shape(self.support[i].values))
+            nnz = tf.reduce_sum(input_tensor=tf.shape(input=self.support[i].values))
             self.support_nnz.append(nnz)
             self.support_transpose_nnz.append(nnz)
 
@@ -316,8 +316,8 @@ class OrdinalMixtureGCN(Layer):
             x_u = dropout_sparse(inputs[0], 1 - self.dropout, self.u_features_nonzero)
             x_v = dropout_sparse(inputs[1], 1 - self.dropout, self.v_features_nonzero)
         else:
-            x_u = tf.nn.dropout(inputs[0], 1 - self.dropout)
-            x_v = tf.nn.dropout(inputs[1], 1 - self.dropout)
+            x_u = tf.nn.dropout(inputs[0], 1 - (1 - self.dropout))
+            x_v = tf.nn.dropout(inputs[1], 1 - (1 - self.dropout))
 
         supports_u = []
         supports_v = []
@@ -325,10 +325,10 @@ class OrdinalMixtureGCN(Layer):
         # self-connections with identity matrix as support
         if self.self_connections:
             uw = dot(x_u, self.weights_u_self_conn, sparse=self.sparse_inputs)
-            supports_u.append(tf.sparse_tensor_dense_matmul(self.u_self_connections, uw))
+            supports_u.append(tf.sparse.sparse_dense_matmul(self.u_self_connections, uw))
 
             vw = dot(x_v, self.weights_v_self_conn, sparse=self.sparse_inputs)
-            supports_v.append(tf.sparse_tensor_dense_matmul(self.v_self_connections, vw))
+            supports_v.append(tf.sparse.sparse_dense_matmul(self.v_self_connections, vw))
 
         wu = 0.
         wv = 0.
@@ -345,8 +345,8 @@ class OrdinalMixtureGCN(Layer):
             support_transpose = self.support_transpose[i]
 
             # then multiply with rating matrices
-            supports_u.append(tf.sparse_tensor_dense_matmul(support, tmp_v))
-            supports_v.append(tf.sparse_tensor_dense_matmul(support_transpose, tmp_u))
+            supports_u.append(tf.sparse.sparse_dense_matmul(support, tmp_v))
+            supports_v.append(tf.sparse.sparse_dense_matmul(support_transpose, tmp_u))
 
         z_u = tf.add_n(supports_u)
         z_v = tf.add_n(supports_v)
@@ -361,14 +361,14 @@ class OrdinalMixtureGCN(Layer):
         return u_outputs, v_outputs
 
     def __call__(self, inputs):
-        with tf.name_scope(self.name):
+        with tf.compat.v1.name_scope(self.name):
             if self.logging and not self.sparse_inputs:
-                tf.summary.histogram(self.name + '/inputs_u', inputs[0])
-                tf.summary.histogram(self.name + '/inputs_v', inputs[1])
+                tf.compat.v1.summary.histogram(self.name + '/inputs_u', inputs[0])
+                tf.compat.v1.summary.histogram(self.name + '/inputs_v', inputs[1])
             outputs_u, outputs_v = self._call(inputs)
             if self.logging:
-                tf.summary.histogram(self.name + '/outputs_u', outputs_u)
-                tf.summary.histogram(self.name + '/outputs_v', outputs_v)
+                tf.compat.v1.summary.histogram(self.name + '/outputs_u', outputs_u)
+                tf.compat.v1.summary.histogram(self.name + '/outputs_v', outputs_v)
             return outputs_u, outputs_v
 
 
@@ -382,7 +382,7 @@ class BilinearMixture(Layer):
                  dropout=0., act=tf.nn.softmax, num_weights=3,
                  diagonal=True, **kwargs):
         super(BilinearMixture, self).__init__(**kwargs)
-        with tf.variable_scope(self.name + '_vars'):
+        with tf.compat.v1.variable_scope(self.name + '_vars'):
 
             for i in range(num_weights):
                 if diagonal:
@@ -418,8 +418,8 @@ class BilinearMixture(Layer):
 
     def _call(self, inputs):
 
-        u_inputs = tf.nn.dropout(inputs[0], 1 - self.dropout)
-        v_inputs = tf.nn.dropout(inputs[1], 1 - self.dropout)
+        u_inputs = tf.nn.dropout(inputs[0], 1 - (1 - self.dropout))
+        v_inputs = tf.nn.dropout(inputs[1], 1 - (1 - self.dropout))
 
         u_inputs = tf.gather(u_inputs, self.u_indices)
         v_inputs = tf.gather(v_inputs, self.v_indices)
@@ -435,7 +435,7 @@ class BilinearMixture(Layer):
         for i in range(self.num_weights):
 
             u_w = self._multiply_inputs_weights(u_inputs, self.vars['weights_%d' % i])
-            x = tf.reduce_sum(tf.multiply(u_w, v_inputs), axis=1)
+            x = tf.reduce_sum(input_tensor=tf.multiply(u_w, v_inputs), axis=1)
 
             basis_outputs.append(x)
 
@@ -453,12 +453,12 @@ class BilinearMixture(Layer):
         return outputs
 
     def __call__(self, inputs):
-        with tf.name_scope(self.name):
+        with tf.compat.v1.name_scope(self.name):
             if self.logging and not self.sparse_inputs:
-                tf.summary.histogram(self.name + '/inputs_u', inputs[0])
-                tf.summary.histogram(self.name + '/inputs_v', inputs[1])
+                tf.compat.v1.summary.histogram(self.name + '/inputs_u', inputs[0])
+                tf.compat.v1.summary.histogram(self.name + '/inputs_v', inputs[1])
 
             outputs = self._call(inputs)
             if self.logging:
-                tf.summary.histogram(self.name + '/outputs', outputs)
+                tf.compat.v1.summary.histogram(self.name + '/outputs', outputs)
             return outputs

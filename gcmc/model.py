@@ -1,10 +1,10 @@
 from __future__ import print_function
-from gcmc.layers import *
+from layers import *
 
-from gcmc.metrics import softmax_accuracy, expected_rmse, softmax_cross_entropy
+from metrics import softmax_accuracy, expected_rmse, softmax_cross_entropy
 
 
-flags = tf.app.flags
+flags = tf.compat.v1.app.flags
 FLAGS = flags.FLAGS
 
 
@@ -44,7 +44,7 @@ class Model(object):
 
     def build(self):
         """ Wrapper for _build() """
-        with tf.variable_scope(self.name):
+        with tf.compat.v1.variable_scope(self.name):
             self._build()
 
         # Build sequential layer model
@@ -55,7 +55,7 @@ class Model(object):
         self.outputs = self.activations[-1]
 
         # Store model variables for easy access
-        variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.name)
+        variables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope=self.name)
         self.vars = {var.name: var for var in variables}
 
         # Build metrics
@@ -76,14 +76,14 @@ class Model(object):
     def save(self, sess=None):
         if not sess:
             raise AttributeError("TensorFlow session not provided.")
-        saver = tf.train.Saver(self.vars)
+        saver = tf.compat.v1.train.Saver(self.vars)
         save_path = saver.save(sess, "tmp/%s.ckpt" % self.name)
         print("Model saved in file: %s" % save_path)
 
     def load(self, sess=None):
         if not sess:
             raise AttributeError("TensorFlow session not provided.")
-        saver = tf.train.Saver(self.vars)
+        saver = tf.compat.v1.train.Saver(self.vars)
         save_path = "tmp/%s.ckpt" % self.name
         saver.restore(sess, save_path)
         print("Model restored from file: %s" % save_path)
@@ -118,13 +118,13 @@ class RecommenderGAE(Model):
         self.learning_rate = learning_rate
 
         # standard settings: beta1=0.9, beta2=0.999, epsilon=1.e-8
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, beta1=0.9, beta2=0.999, epsilon=1.e-8)
+        self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate, beta1=0.9, beta2=0.999, epsilon=1.e-8)
 
         self.build()
 
         moving_average_decay = 0.995
         self.variable_averages = tf.train.ExponentialMovingAverage(moving_average_decay, self.global_step)
-        self.variables_averages_op = self.variable_averages.apply(tf.trainable_variables())
+        self.variables_averages_op = self.variable_averages.apply(tf.compat.v1.trainable_variables())
 
         with tf.control_dependencies([self.opt_op]):
             self.training_op = tf.group(self.variables_averages_op)
@@ -136,7 +136,7 @@ class RecommenderGAE(Model):
     def _loss(self):
         self.loss += softmax_cross_entropy(self.outputs, self.labels)
 
-        tf.summary.scalar('loss', self.loss)
+        tf.compat.v1.summary.scalar('loss', self.loss)
 
     def _accuracy(self):
         self.accuracy = softmax_accuracy(self.outputs, self.labels)
@@ -144,7 +144,7 @@ class RecommenderGAE(Model):
     def _rmse(self):
         self.rmse = expected_rmse(self.outputs, self.labels, self.class_values)
 
-        tf.summary.scalar('rmse_score', self.rmse)
+        tf.compat.v1.summary.scalar('rmse_score', self.rmse)
 
     def _build(self):
         if self.accum == 'sum':
@@ -242,13 +242,13 @@ class RecommenderSideInfoGAE(Model):
         self.learning_rate = learning_rate
 
         # standard settings: beta1=0.9, beta2=0.999, epsilon=1.e-8
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, beta1=0.9, beta2=0.999, epsilon=1.e-8)
+        self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate, beta1=0.9, beta2=0.999, epsilon=1.e-8)
 
         self.build()
 
         moving_average_decay = 0.995
         self.variable_averages = tf.train.ExponentialMovingAverage(moving_average_decay, self.global_step)
-        self.variables_averages_op = self.variable_averages.apply(tf.trainable_variables())
+        self.variables_averages_op = self.variable_averages.apply(tf.compat.v1.trainable_variables())
 
         with tf.control_dependencies([self.opt_op]):
             self.training_op = tf.group(self.variables_averages_op)
@@ -260,7 +260,7 @@ class RecommenderSideInfoGAE(Model):
     def _loss(self):
         self.loss += softmax_cross_entropy(self.outputs, self.labels)
 
-        tf.summary.scalar('loss', self.loss)
+        tf.compat.v1.summary.scalar('loss', self.loss)
 
     def _accuracy(self):
         self.accuracy = softmax_accuracy(self.outputs, self.labels)
@@ -268,7 +268,7 @@ class RecommenderSideInfoGAE(Model):
     def _rmse(self):
         self.rmse = expected_rmse(self.outputs, self.labels, self.class_values)
 
-        tf.summary.scalar('rmse_score', self.rmse)
+        tf.compat.v1.summary.scalar('rmse_score', self.rmse)
 
     def _build(self):
         if self.accum == 'sum':
@@ -334,7 +334,7 @@ class RecommenderSideInfoGAE(Model):
 
     def build(self):
         """ Wrapper for _build() """
-        with tf.variable_scope(self.name):
+        with tf.compat.v1.variable_scope(self.name):
             self._build()
 
         # Build split sequential layer model
@@ -371,7 +371,7 @@ class RecommenderSideInfoGAE(Model):
         self.outputs = self.activations[-1]
 
         # Store model variables for easy access
-        variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.name)
+        variables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope=self.name)
         self.vars = {var.name: var for var in variables}
 
         # Build metrics
